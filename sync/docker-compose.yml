@@ -1,0 +1,12 @@
+services:
+  sync:
+    build: .
+    env_file: ../.env
+    environment:
+      - SYNC_STATE_FILE=/data/sync_state.json
+    volumes:
+      - sync-data:/data
+    restart: unless-stopped
+
+volumes:
+  sync-data:

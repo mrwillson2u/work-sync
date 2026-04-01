@@ -1,0 +1,8 @@
+.env
+reviews/
+audit/
+.claude
+activity_classifier.json
+__pycache__/
+*.pyc
+.DS_Store
