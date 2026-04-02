@@ -12,6 +12,8 @@ CODA_API_TOKEN = os.environ.get("CODA_API_TOKEN", "")
 CODA_DOC_ID = "OSAZiA68PX"
 CODA_TT_DATA_TABLE = "grid-9FUJAxlzM1"
 CODA_ALL_TASKS_TABLE = "grid-L6CM1HyWMk"
+CODA_PROJECTS_TABLE = "grid-Xvp3xIJw15"
+CODA_WORK_ORDERS_TABLE = "grid-0Xxvqy_u70"
 
 # --- Coda TimeTagger Data column IDs ---
 TT_DATA_COLS = {
