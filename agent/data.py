@@ -1,6 +1,7 @@
 """Data layer for agent tools. Pure data fetching and aggregation — no business logic."""
 
 from collections import defaultdict
+from datetime import datetime, timezone
 
 import requests
 
@@ -79,3 +80,22 @@ def aggregate_hours(records, group_by="work_order_id"):
         key = rec["tags"].get(group_by) or "untagged"
         totals[key] += rec["duration_hours"]
     return {k: round(v, 2) for k, v in totals.items()}
+
+
+def aggregate_hours_by_day(records, tz_name="America/Los_Angeles"):
+    """Aggregate TT record hours by calendar date. Returns {YYYY-MM-DD: total_hours}.
+
+    Uses the record start time (t1) to determine which day it belongs to.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_name)
+    except ImportError:
+        tz = timezone.utc
+
+    by_day = defaultdict(float)
+    for rec in records:
+        dt = datetime.fromtimestamp(rec["t1"], tz=tz)
+        day_str = dt.strftime("%Y-%m-%d")
+        by_day[day_str] += rec["duration_hours"]
+    return {k: round(v, 2) for k, v in sorted(by_day.items())}

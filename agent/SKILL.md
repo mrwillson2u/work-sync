@@ -20,6 +20,24 @@ python3 ~/Repositories/work-tracker/agent/tools/get_status.py --hours 30   # cha
 
 This tool outputs raw data: work orders, projects, tasks, and TimeTagger hours aggregated by tag. It does NOT interpret the data — that's your job.
 
+### get_brief.py — Daily/weekly briefing data
+
+```bash
+python3 ~/Repositories/work-tracker/agent/tools/get_brief.py              # daily brief (current week)
+python3 ~/Repositories/work-tracker/agent/tools/get_brief.py --weekly     # full week summary
+python3 ~/Repositories/work-tracker/agent/tools/get_brief.py --days 14    # change lookback
+```
+
+Outputs hours per day this week, missing weekdays, hours by WO/project, untagged entries, and active WO budget info. Use this for morning briefings and weekly reviews.
+
+### run_audit.py — System health check
+
+```bash
+python3 ~/Repositories/work-tracker/agent/tools/run_audit.py
+```
+
+Outputs untagged entries, partially tagged entries, weekdays with no hours (past 2 weeks), WO budget vs actual hours, and tasks without any time logged. Use this for background health checks — only alert Colin if something looks wrong.
+
 ## How to Interpret the Data
 
 ### Work Order lifecycle
@@ -76,11 +94,20 @@ When you get data back, use your judgment. Here are the kinds of things Colin ne
 
 **"What should I work on?"** — Look at open tasks, which projects are behind/ahead, and upcoming deadlines. Suggest priorities.
 
+## Scheduled Workflows
+
+These tools are designed to be called by cron jobs:
+
+**Morning brief (weekdays ~8:30am):** Run `get_brief.py`, compose a friendly summary for Colin. Lead with hours this week, flag any missing days, highlight the most relevant WO. Keep it short.
+
+**Weekly review (Friday ~4pm):** Run `get_brief.py --weekly`, give a full week recap. Compare hours to WO budgets, note what got done, flag anything concerning for next week.
+
+**System audit (weekly, background):** Run `run_audit.py`. Only message Colin if something needs attention (untagged hours, missing days, budget issues). If everything looks clean, stay silent.
+
 ## Future Tools (not built yet)
 
 If Colin asks about these, tell him they're on the roadmap:
-- **Morning brief** — scheduled daily summary
-- **Activity analysis** — cross-reference screen time with TT entries
+- **Activity analysis** — cross-reference screen time with TT entries (needs access to Mac's activity_log.db)
 - **Invoice generation** — format hours into invoice template
 - **New work order creation** — conversational setup flow
 - **Standup review** — parse transcripts for action items
