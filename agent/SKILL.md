@@ -30,6 +30,15 @@ python3 ~/Repositories/work-tracker/agent/tools/get_brief.py --days 14    # chan
 
 Outputs hours per day this week, missing weekdays, hours by WO/project, untagged entries, and active WO budget info. Use this for morning briefings and weekly reviews.
 
+### check_day.py — End-of-day check-in data
+
+```bash
+python3 ~/Repositories/work-tracker/agent/tools/check_day.py              # today
+python3 ~/Repositories/work-tracker/agent/tools/check_day.py 2026-03-31   # specific date
+```
+
+Outputs what was logged in TimeTagger today (entries with times and descriptions) and active tasks from open/drafting WOs. Use this to have a conversational end-of-day review with Colin — compare what he planned vs what actually happened.
+
 ### run_audit.py — System health check
 
 ```bash
@@ -99,6 +108,8 @@ When you get data back, use your judgment. Here are the kinds of things Colin ne
 These tools are designed to be called by cron jobs:
 
 **Morning brief (weekdays ~8:30am):** Run `get_brief.py`, compose a friendly summary for Colin. Lead with hours this week, flag any missing days, highlight the most relevant WO. Keep it short.
+
+**Evening check-in (weekdays ~6pm):** Run `check_day.py`, then have a conversation with Colin. Walk through what he logged today, ask about anything that looks off (low hours, untagged time, gaps). Compare against his active tasks — did he work on what he planned? Don't interrogate — keep it casual and helpful. If Colin adds context or corrections, acknowledge and move on.
 
 **Weekly review (Friday ~4pm):** Run `get_brief.py --weekly`, give a full week recap. Compare hours to WO budgets, note what got done, flag anything concerning for next week.
 
