@@ -14,6 +14,21 @@ CODA_TT_DATA_TABLE = "grid-9FUJAxlzM1"
 CODA_ALL_TASKS_TABLE = "grid-L6CM1HyWMk"
 CODA_PROJECTS_TABLE = "grid-Xvp3xIJw15"
 CODA_WORK_ORDERS_TABLE = "grid-0Xxvqy_u70"
+CODA_CLIENTS_TABLE = "grid-sChOaO0Qdi"
+
+# --- Coda Projects column IDs ---
+PROJECT_COLS = {
+    "name": "c-pWYEnWwqPn",
+    "project_id": "c-OX__tecTAP",
+    "work_order": "c-P2vnGNUt1l",
+    "client": "c-WC2-crdxIf",
+}
+
+# --- Coda Clients column IDs ---
+CLIENT_COLS = {
+    "name": "c--W0OW8os8q",
+    "short_name": "c-AzjtTi5S6L",
+}
 
 # --- Coda TimeTagger Data column IDs ---
 TT_DATA_COLS = {

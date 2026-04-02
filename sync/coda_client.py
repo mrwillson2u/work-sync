@@ -4,7 +4,8 @@ import requests
 from config import (
     CODA_API_TOKEN, CODA_DOC_ID,
     CODA_TT_DATA_TABLE, CODA_ALL_TASKS_TABLE,
-    TT_DATA_COLS, TASK_COLS,
+    CODA_PROJECTS_TABLE, CODA_CLIENTS_TABLE,
+    TT_DATA_COLS, TASK_COLS, PROJECT_COLS, CLIENT_COLS,
 )
 
 log = logging.getLogger(__name__)
@@ -48,12 +49,13 @@ def get_tt_data_rows():
     return keyed
 
 
-def upsert_tt_data_row(tt_record, parsed_tags, existing_row_id=None, write_tags=True):
+def upsert_tt_data_row(tt_record, parsed_tags, existing_row_id=None):
     """Insert or update a row in the TimeTagger Data table."""
     ds = tt_record.get("ds", "")
     t1 = tt_record.get("t1", 0)
     t2 = tt_record.get("t2", 0)
 
+    # Only write core fields — tag columns are Coda formulas (auto-parsed from ds)
     cells = [
         {"column": TT_DATA_COLS["key"], "value": tt_record.get("key", "")},
         {"column": TT_DATA_COLS["t1"], "value": t1},
@@ -62,14 +64,6 @@ def upsert_tt_data_row(tt_record, parsed_tags, existing_row_id=None, write_tags=
         {"column": TT_DATA_COLS["mt"], "value": tt_record.get("mt", 0)},
         {"column": TT_DATA_COLS["st"], "value": tt_record.get("st", 0)},
     ]
-
-    if write_tags:
-        cells.extend([
-            {"column": TT_DATA_COLS["task_id"], "value": parsed_tags.get("task_id", "")},
-            {"column": TT_DATA_COLS["project_id"], "value": parsed_tags.get("project_id", "")},
-            {"column": TT_DATA_COLS["work_order_id"], "value": parsed_tags.get("work_order_id", "")},
-            {"column": TT_DATA_COLS["client_tag"], "value": parsed_tags.get("client_tag", "")},
-        ])
 
     if existing_row_id:
         url = f"{BASE}/docs/{CODA_DOC_ID}/tables/{CODA_TT_DATA_TABLE}/rows/{existing_row_id}"
@@ -109,12 +103,8 @@ def upsert_tt_data_row(tt_record, parsed_tags, existing_row_id=None, write_tags=
 
 
 def update_tt_data_tags(row_id, task_tag, project_tag, wo_tag, client_tag, new_ds):
-    """Update tag fields and ds on a TimeTagger Data row (after Coda→TT push confirms)."""
+    """Update ds on a TimeTagger Data row. Tag columns are Coda formulas (auto-parsed from ds)."""
     cells = [
-        {"column": TT_DATA_COLS["task_id"], "value": task_tag},
-        {"column": TT_DATA_COLS["project_id"], "value": project_tag},
-        {"column": TT_DATA_COLS["work_order_id"], "value": wo_tag},
-        {"column": TT_DATA_COLS["client_tag"], "value": client_tag},
         {"column": TT_DATA_COLS["ds"], "value": new_ds},
     ]
     url = f"{BASE}/docs/{CODA_DOC_ID}/tables/{CODA_TT_DATA_TABLE}/rows/{row_id}"
@@ -147,6 +137,42 @@ def get_all_tasks():
             }
     log.info("Loaded %d tasks from Coda", len(tasks))
     return tasks
+
+
+def get_clients():
+    """Get all clients, keyed by display name. Returns short_name for use as tag."""
+    rows = _get_all_rows(CODA_CLIENTS_TABLE)
+    clients = {}
+    for row in rows:
+        vals = row.get("values", {})
+        name = vals.get(CLIENT_COLS["name"], "")
+        short = vals.get(CLIENT_COLS["short_name"], "")
+        if name and short:
+            clients[name] = f"#{short}"
+    log.info("Loaded %d clients from Coda", len(clients))
+    return clients
+
+
+def get_projects(clients=None):
+    """Get all projects, keyed by name. Resolves client name to tag via clients lookup."""
+    if clients is None:
+        clients = get_clients()
+    rows = _get_all_rows(CODA_PROJECTS_TABLE)
+    projects = {}
+    for row in rows:
+        vals = row.get("values", {})
+        name = vals.get(PROJECT_COLS["name"], "")
+        proj_id = vals.get(PROJECT_COLS["project_id"], "")
+        wo = vals.get(PROJECT_COLS["work_order"], "")
+        client_name = vals.get(PROJECT_COLS["client"], "")
+        if name:
+            projects[name] = {
+                "project_id": f"#{proj_id.lower()}" if proj_id else "",
+                "work_order_id": f"#{wo.lower()}" if wo else "",
+                "client_tag": clients.get(client_name, ""),
+            }
+    log.info("Loaded %d projects from Coda", len(projects))
+    return projects
 
 
 def _clean_ds(ds):

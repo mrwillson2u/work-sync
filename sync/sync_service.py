@@ -89,36 +89,10 @@ def phase1_tt_to_coda(state, full=False):
             # Compare timestamps — only update if TT is newer
             coda_mt = existing["values"].get(config.TT_DATA_COLS["mt"], 0)
             if isinstance(coda_mt, (int, float)) and mt > coda_mt:
-                # Check for pending Coda tag edit: compare tag fields vs ds tags
-                coda_task = existing["values"].get(config.TT_DATA_COLS["task_id"], "")
-                coda_proj = existing["values"].get(config.TT_DATA_COLS["project_id"], "")
-                coda_wo = existing["values"].get(config.TT_DATA_COLS["work_order_id"], "")
-                coda_client_tag = existing["values"].get(config.TT_DATA_COLS["client_tag"], "")
-                # Normalize lists
-                for v in [coda_task, coda_proj, coda_wo, coda_client_tag]:
-                    if isinstance(v, list):
-                        v = v[0] if v else ""
-                coda_ds = existing["values"].get(config.TT_DATA_COLS["ds"], "")
-                ds_tags = config.parse_tags(coda_ds)
-
-                # If Coda tag fields differ from ds tags, someone edited in Coda
-                # → only update time fields, don't overwrite tag edits
-                pending_edit = (
-                    str(coda_task) != ds_tags["task_id"]
-                    or str(coda_proj) != ds_tags["project_id"]
-                    or str(coda_wo) != ds_tags["work_order_id"]
-                    or str(coda_client_tag) != ds_tags["client_tag"]
-                )
                 try:
-                    coda_client.upsert_tt_data_row(
-                        rec, parsed, existing["row_id"],
-                        write_tags=not pending_edit
-                    )
+                    coda_client.upsert_tt_data_row(rec, parsed, existing["row_id"])
                     updated += 1
-                    if pending_edit:
-                        log.info("  Updated %s (time only — pending Coda tag edit)", tt_key)
-                    else:
-                        log.debug("  Updated %s", tt_key)
+                    log.debug("  Updated %s", tt_key)
                 except Exception as e:
                     log.error("  Failed to update %s: %s", tt_key, e)
             else:
@@ -138,135 +112,91 @@ def phase1_tt_to_coda(state, full=False):
 
 
 def phase2_coda_to_tt(state):
-    """Push tag edits from Coda back to TimeTagger.
+    """Phase 2 is no longer needed.
 
-    Only processes rows edited in Coda AFTER the last Phase 2 run,
-    to avoid pushing stale tag diffs from old N8N data.
+    Tag columns in Coda are now formulas (auto-parsed from ds).
+    They can't be edited by a human. Tag reassignments are handled
+    by Phase 3 (task moves → rebuild ds → push to both Coda and TT).
+
+    Keeping this as a no-op for now in case we need it later.
     """
-    log.info("Phase 2: Coda → TT")
-
-    last_p2 = state.get("last_coda_to_tt", 0)
-    coda_rows = coda_client.get_tt_data_rows()
-
-    to_push = []
-    for tt_key, row in coda_rows.items():
-        # Only consider rows edited after last Phase 2 run
-        row_updated = _iso_to_epoch(row["updated_at"])
-        if last_p2 and row_updated < last_p2:
-            continue
-
-        vals = row["values"]
-        ds = vals.get(config.TT_DATA_COLS["ds"], "")
-        ds_tags = config.parse_tags(ds)
-
-        # Get the tag fields (single source — no more "updated_*" duplication)
-        def _norm(v):
-            return (v[0] if v else "") if isinstance(v, list) else (v or "")
-
-        row_task = _norm(vals.get(config.TT_DATA_COLS["task_id"], ""))
-        row_proj = _norm(vals.get(config.TT_DATA_COLS["project_id"], ""))
-        row_wo = _norm(vals.get(config.TT_DATA_COLS["work_order_id"], ""))
-        row_client = _norm(vals.get(config.TT_DATA_COLS["client_tag"], ""))
-
-        # If tag fields differ from what's in ds, someone edited tags in Coda
-        changed = (
-            row_task != ds_tags["task_id"]
-            or row_proj != ds_tags["project_id"]
-            or row_wo != ds_tags["work_order_id"]
-            or row_client != ds_tags["client_tag"]
-        )
-
-        if changed and (row_task or row_proj):
-            ds_clean = config.clean_description(ds)
-            new_ds = config.rebuild_description(
-                ds_clean, row_task, row_proj, row_wo, row_client
-            )
-            to_push.append({
-                "key": tt_key,
-                "new_ds": new_ds,
-                "row_id": row["row_id"],
-                "coda_updated": row["updated_at"],
-            })
-
-    if not to_push:
-        log.info("  No Coda tag changes to push")
-        return 0
-
-    log.info("  %d records with tag changes to push to TT", len(to_push))
-
-    # Fetch all current TT records once for conflict checking
-    all_tt = tt_client.get_records(1748736000, int(time.time()) + 1)
-    tt_by_key = {r["key"]: r for r in all_tt}
-
-    pushed = 0
-    skipped = 0
-    for item in to_push:
-        try:
-            tt_rec = tt_by_key.get(item["key"])
-            if not tt_rec:
-                log.warning("  TT record %s not found, skipping", item["key"])
-                continue
-
-            # Conflict check: Coda updated_at vs TT mt
-            coda_epoch = _iso_to_epoch(item["coda_updated"])
-            tt_mt = tt_rec.get("mt", 0)
-
-            if coda_epoch >= tt_mt:
-                tt_rec["ds"] = item["new_ds"]
-                tt_rec["mt"] = time.time()
-                result = tt_client.put_records([tt_rec])
-                if result.get("accepted"):
-                    pushed += 1
-                    log.debug("  Pushed tags for %s", item["key"])
-            else:
-                skipped += 1
-                log.debug("  Skipped %s — TT is newer", item["key"])
-        except Exception as e:
-            log.error("  Failed to push %s: %s", item["key"], e)
-
-    state["last_coda_to_tt"] = time.time()
-    log.info("  Phase 2 done: %d pushed, %d skipped (TT newer)", pushed, skipped)
-    return pushed
+    log.info("Phase 2: skipped (tag columns are Coda formulas)")
+    return 0
 
 
 def phase3_task_reassignments(state):
-    """Propagate project/WO changes from All Tasks to TimeTagger Data rows."""
+    """Propagate project/WO changes from All Tasks to TimeTagger Data rows.
+
+    When a task moves to a different project (or a project moves to a different WO),
+    this updates all TT Data rows for that task with the correct #pro-XX, #wo-XX,
+    and client tags. Phase 2 then picks up the change and pushes it to TT.
+
+    Lookup chain: task → project name → Projects table → project_id + WO + client
+    """
     log.info("Phase 3: Task reassignment check")
 
     tasks = coda_client.get_all_tasks()
+    clients = coda_client.get_clients()
+    projects = coda_client.get_projects(clients)
     coda_rows = coda_client.get_tt_data_rows()
+
+    def _norm(v):
+        return (v[0] if v else "") if isinstance(v, list) else (v or "")
 
     updates = 0
     for tt_key, row in coda_rows.items():
         vals = row["values"]
-        task_tag = vals.get(config.TT_DATA_COLS["task_id"], "")
-        if isinstance(task_tag, list):
-            task_tag = task_tag[0] if task_tag else ""
-
+        task_tag = _norm(vals.get(config.TT_DATA_COLS["task_id"], ""))
         if not task_tag or not task_tag.startswith("#tsk-"):
             continue
 
-        # Find the matching task
+        # Find the matching task in All Tasks
         tsk_id = task_tag.replace("#", "").upper()  # e.g., TSK-213
         task = tasks.get(tsk_id)
         if not task:
             continue
 
-        # Check if task's project/WO changed vs what's in the TT data row
-        current_proj = vals.get(config.TT_DATA_COLS["project_id"], "")
-        current_wo = vals.get(config.TT_DATA_COLS["work_order_id"], "")
-        if isinstance(current_proj, list):
-            current_proj = current_proj[0] if current_proj else ""
-        if isinstance(current_wo, list):
-            current_wo = current_wo[0] if current_wo else ""
+        # Look up the task's current project → get expected tags
+        project_name = task.get("project", "")
+        proj_info = projects.get(project_name, {})
+        expected_proj = proj_info.get("project_id", "")
+        expected_wo = proj_info.get("work_order_id", "")
+        expected_client = proj_info.get("client_tag", "")
 
-        # Task's tt_description field has the canonical tags
-        task_tt_desc = task.get("name", "")  # This is the task name
-        # We need to derive expected tags from the task's project/WO
-        # The task row has project and work_order as lookup values (names, not IDs)
-        # We can't easily reverse-map names to #pro-XX here, so we rely on
-        # the tt_description field in All Tasks which contains the full tag string
-        # For now, skip this phase — it will be handled when we have project ID lookups
+        # If task has no project assigned, skip
+        if not expected_proj:
+            continue
+
+        # Compare against what's in the TT Data row
+        current_proj = _norm(vals.get(config.TT_DATA_COLS["project_id"], ""))
+        current_wo = _norm(vals.get(config.TT_DATA_COLS["work_order_id"], ""))
+        current_client = _norm(vals.get(config.TT_DATA_COLS["client_tag"], ""))
+
+        if (current_proj != expected_proj
+                or current_wo != expected_wo
+                or current_client != expected_client):
+            # Update the TT Data row with correct tags
+            ds = _norm(vals.get(config.TT_DATA_COLS["ds"], ""))
+            ds_clean = config.clean_description(ds)
+            new_ds = config.rebuild_description(
+                ds_clean, task_tag, expected_proj, expected_wo, expected_client
+            )
+            try:
+                # Update ds in Coda (formulas auto-parse tags)
+                coda_client.update_tt_data_tags(
+                    row["row_id"], task_tag, expected_proj, expected_wo, expected_client, new_ds
+                )
+                # Also update TT so both sides match (prevents Phase 1 from reverting)
+                tt_rec = {"key": tt_key, "ds": new_ds, "mt": time.time(),
+                          "t1": vals.get(config.TT_DATA_COLS["t1"], 0),
+                          "t2": vals.get(config.TT_DATA_COLS["t2"], 0),
+                          "st": vals.get(config.TT_DATA_COLS["st"], 0)}
+                tt_client.put_records([tt_rec])
+                updates += 1
+                log.info("  Reassigned %s: %s → %s %s %s",
+                         tt_key, current_proj, expected_proj, expected_wo, expected_client)
+            except Exception as e:
+                log.error("  Failed to reassign %s: %s", tt_key, e)
 
     log.info("  Phase 3 done: %d reassignments propagated", updates)
     return updates
